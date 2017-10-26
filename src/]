@@ -1,0 +1,92 @@
+module Main exposing (..)
+
+import Char exposing (fromCode, toCode)
+import Html exposing (Html, div, img, span, text)
+import Html.Attributes exposing (property, src)
+import Json.Decode as JD
+import Json.Encode exposing (string)
+import String exposing (fromChar, toLower)
+import Tuple
+
+
+---- MODEL ----
+
+
+type alias Model =
+    { emojis : Result String (List Emoji)
+    , emojisUrl : String
+    }
+
+
+type alias Emoji =
+    { name : Maybe String
+    , x : Int
+    , y : Int
+    }
+
+
+decodeEmojis : JD.Decoder (List Emoji)
+decodeEmojis =
+    JD.list
+        (JD.map3 Emoji
+            (JD.maybe (JD.field "name" JD.string))
+            (JD.field "sheet_x" JD.int)
+            (JD.field "sheet_y" JD.int)
+        )
+
+
+init : JD.Value -> ( Model, Cmd Msg )
+init flags =
+    let
+        result =
+            JD.decodeValue (JD.map (,) (JD.index 0 decodeEmojis) (JD.index 1 string)) emojis
+    in
+    ( { emojis = Tuple.first result, emojisUrl = Tuple.second result }, Cmd.none )
+
+
+
+---- UPDATE ----
+
+
+type Msg
+    = NoOp
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    ( model, Cmd.none )
+
+
+
+---- VIEW ----
+
+
+hexToInt : String -> Int
+hexToInt =
+    String.foldl (\hexDigit int -> int * 16 + toCode hexDigit % 39 - 9) 0 << toLower
+
+
+codeToStr : Int -> String
+codeToStr =
+    fromChar << fromCode
+
+
+view : Model -> Html Msg
+view model =
+    div []
+        [ span [ property "innerHTML" <| string <| codeToStr <| hexToInt "1f606" ] []
+        ]
+
+
+
+---- PROGRAM ----
+
+
+main : Program JD.Value Model Msg
+main =
+    Html.programWithFlags
+        { view = view
+        , init = init
+        , update = update
+        , subscriptions = always Sub.none
+        }

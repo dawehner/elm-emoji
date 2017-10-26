@@ -1,0 +1,10 @@
+{
+  "name": "elm-emoji",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": {},
+  "license": "MIT",
+  "dependencies": {
+    "emoji-datasource": "^3.0.0"
+  }
+}
