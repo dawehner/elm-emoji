@@ -136,7 +136,7 @@ viewCategorySelector activeCategory emojis =
         options =
             List.map (\cat -> E.text cat |> E.el (navStyle cat) [ EE.onClick (SelectCategory cat) ]) categories
     in
-    E.navigation None
+    E.navigation CategoryList
         [ EA.spacing 10 ]
         { options = options
         , name = "Category"
@@ -186,7 +186,7 @@ viewEmojis url emojis =
                 emojis
     in
     E.grid None
-        [ EA.yScrollbar, EA.maxHeight (EA.px 500), EA.spacing 16 ]
+        [ EA.yScrollbar, EA.maxHeight (EA.px 550), EA.spacing 24 ]
         { columns = columns
         , rows = rows
         , cells = cells
@@ -196,12 +196,16 @@ viewEmojis url emojis =
 type Styles
     = None
     | ActiveCategory
+    | CategoryList
+    | EmojisWidget
 
 
 stylesheet =
     S.styleSheet
         [ S.style None []
         , S.style ActiveCategory [ Style.Border.bottom 2, Style.Border.solid ]
+        , S.style CategoryList [ Style.Border.bottom 1, Style.Border.solid ]
+        , S.style EmojisWidget [ Style.Border.all 1, Style.Border.rounded 2, Style.Border.solid ]
         ]
 
 
@@ -213,7 +217,7 @@ view model =
                 selectedEmojis =
                     Maybe.map (\category -> emojisByCategory category config.emojis) model.selectedCategory
             in
-            E.column None
+            E.column EmojisWidget
                 [ EA.center ]
                 [ viewCategorySelector model.selectedCategory config.emojis
                 , Maybe.map (viewEmojis config.emojisUrl) selectedEmojis
