@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Char exposing (fromCode, toCode)
+import Color
 import Element as E
 import Element.Attributes as EA
 import Element.Events as EE
@@ -14,6 +15,7 @@ import String exposing (fromChar, toLower)
 import Style as S
 import Style.Background
 import Style.Border
+import Style.Color
 
 
 type alias Model =
@@ -34,7 +36,7 @@ type alias Config =
 
 
 type alias Emoji =
-    { name : Maybe String
+    { name : String
     , x : Int
     , y : Int
     , category : String
@@ -44,12 +46,15 @@ type alias Emoji =
 decodeEmojis : JD.Decoder (List Emoji)
 decodeEmojis =
     JD.list
-        (JD.map4 Emoji
-            (JD.maybe (JD.field "name" JD.string))
-            (JD.field "sheet_x" JD.int)
-            (JD.field "sheet_y" JD.int)
-            (JD.field "category" JD.string)
+        (JD.maybe
+            (JD.map4 Emoji
+                (JD.field "name" JD.string)
+                (JD.field "sheet_x" JD.int)
+                (JD.field "sheet_y" JD.int)
+                (JD.field "category" JD.string)
+            )
         )
+        |> JD.map (List.filterMap identity)
 
 
 init : JD.Value -> ( Model, Cmd Msg )
@@ -74,7 +79,7 @@ update msg model =
                 selectedEmoji =
                     Result.map
                         (\config ->
-                            List.filter (\emoji -> emoji.name == Just name) config.emojis
+                            List.filter (.name >> (==) name) config.emojis
                                 |> List.head
                         )
                         model.config
@@ -104,7 +109,7 @@ spriteCss x y url =
     [ ( "width", "32px" )
     , ( "height", "32px" )
     , ( "background", "url(" ++ url ++ ")" )
-    , ( "background-position", toString x ++ "px " ++ "-" ++ toString y ++ "px" )
+    , ( "background-position", "-" ++ toString x ++ "px " ++ "-" ++ toString y ++ "px" )
     ]
         |> Debug.log "mhey"
 
@@ -146,7 +151,17 @@ viewCategorySelector activeCategory emojis =
 viewEmoji : String -> Emoji -> E.Element Styles variation Msg
 viewEmoji url emoji =
     E.html <|
-        div ((Maybe.withDefault [] <| Maybe.map (\name -> [ onClick (SelectEmoji name) ]) emoji.name) ++ [ style <| spriteCss (32 * emoji.x) (32 * emoji.y) url ]) []
+        div [ onClick (SelectEmoji emoji.name), style <| spriteCss (32 * emoji.x) (32 * emoji.y) url ] []
+
+
+viewEmojiDetail : String -> Emoji -> E.Element Styles variation Msg
+viewEmojiDetail url emoji =
+    E.row None
+        [ EA.verticalCenter ]
+        [ E.html <|
+            div [ style <| spriteCss (32 * emoji.x) (32 * emoji.y) url ] []
+        , E.text emoji.name
+        ]
 
 
 emojisByCategory : String -> List Emoji -> List Emoji
@@ -161,10 +176,10 @@ viewEmojis url emojis =
             toFloat <| List.length emojis
 
         x =
-            min 8 <| ceiling <| sqrt length
+            min 9 <| ceiling <| sqrt length
 
         y =
-            ceiling <| (length / 8)
+            ceiling <| (length / 9)
 
         columns =
             List.range 0 x |> List.map (\a -> EA.px 32)
@@ -185,8 +200,8 @@ viewEmojis url emojis =
                 )
                 emojis
     in
-    E.grid None
-        [ EA.yScrollbar, EA.maxHeight (EA.px 550), EA.spacing 24 ]
+    E.grid EmojisGrid
+        [ EA.yScrollbar, EA.maxHeight (EA.px 300), EA.spacing 24 ]
         { columns = columns
         , rows = rows
         , cells = cells
@@ -198,6 +213,7 @@ type Styles
     | ActiveCategory
     | CategoryList
     | EmojisWidget
+    | EmojisGrid
 
 
 stylesheet =
@@ -205,7 +221,8 @@ stylesheet =
         [ S.style None []
         , S.style ActiveCategory [ Style.Border.bottom 2, Style.Border.solid ]
         , S.style CategoryList [ Style.Border.bottom 1, Style.Border.solid ]
-        , S.style EmojisWidget [ Style.Border.all 1, Style.Border.rounded 2, Style.Border.solid ]
+        , S.style EmojisWidget [ Style.Border.all 1, Style.Border.rounded 2, Style.Border.solid, Style.Color.background (Color.rgb 249 249 249) ]
+        , S.style EmojisGrid [ Style.Color.background Color.white ]
         ]
 
 
@@ -222,7 +239,7 @@ view model =
                 [ viewCategorySelector model.selectedCategory config.emojis
                 , Maybe.map (viewEmojis config.emojisUrl) selectedEmojis
                     |> Maybe.withDefault (E.text "No category selected")
-                , Maybe.map (viewEmoji config.emojisUrl) model.selectedEmoji
+                , Maybe.map (viewEmojiDetail config.emojisUrl) model.selectedEmoji
                     |> Maybe.withDefault (E.text "No emoji selected")
                 ]
                 |> E.layout stylesheet
