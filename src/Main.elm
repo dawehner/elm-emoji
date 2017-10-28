@@ -5,25 +5,21 @@ import Color
 import Element as E
 import Element.Attributes as EA
 import Element.Events as EE
-import Element.Input as EI
 import Html exposing (Html, div, img, option, select, span, text)
-import Html.Attributes exposing (property, src, style, value)
-import Html.Events exposing (on, onClick, targetValue)
 import Json.Decode as JD
+import Keyboard
+import List.Extra
+import Platform.Sub
 import Set
 import String exposing (fromChar, toLower)
 import Style as S
-import Style.Background
 import Style.Border
 import Style.Color
 
 
 type alias Model =
     { config :
-        Result String
-            { emojis : List Emoji
-            , emojisUrl : String
-            }
+        Result String Config
     , selectedEmoji : Maybe Emoji
     , selectedCategory : Maybe String
     }
@@ -32,6 +28,7 @@ type alias Model =
 type alias Config =
     { emojis : List Emoji
     , emojisUrl : String
+    , categories : List String
     }
 
 
@@ -41,6 +38,19 @@ type alias Emoji =
     , y : Int
     , category : String
     }
+
+
+type Cursor
+    = Left
+    | Up
+    | Right
+    | Down
+
+
+type Selection
+    = NoSelection
+    | CategorySelection String
+    | EmojiSelection String
 
 
 decodeEmojis : JD.Decoder (List Emoji)
@@ -60,20 +70,43 @@ decodeEmojis =
 init : JD.Value -> ( Model, Cmd Msg )
 init flags =
     let
-        result =
-            JD.decodeValue (JD.map2 Config (JD.index 0 decodeEmojis) (JD.index 1 JD.string)) flags
+        emojis =
+            JD.decodeValue (JD.index 0 decodeEmojis) flags
+
+        emojiUrl =
+            JD.decodeValue (JD.index 1 JD.string) flags
+
+        categories =
+            Result.map
+                (\emojis_ ->
+                    List.map .category emojis_ |> Set.fromList |> Set.toList
+                )
+                emojis
+
+        config =
+            Result.map3 Config emojis emojiUrl categories
     in
-    ( { config = result, selectedEmoji = Nothing, selectedCategory = Nothing }, Cmd.none )
+    ( { config = config
+      , selectedEmoji = Nothing
+      , selectedCategory = Just "People"
+      }
+    , Cmd.none
+    )
 
 
 type Msg
-    = SelectEmoji String
+    = Noop
+    | SelectEmoji String
     | SelectCategory String
+    | CursorMove Cursor
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Noop ->
+            ( model, Cmd.none )
+
         SelectEmoji name ->
             let
                 selectedEmoji =
@@ -93,6 +126,54 @@ update msg model =
         SelectCategory category ->
             ( { model | selectedCategory = Just category }, Cmd.none )
 
+        CursorMove cursor ->
+            case cursor of
+                Left ->
+                    case model.selectedCategory of
+                        Just category ->
+                            let
+                                selectedCategory =
+                                    Result.map
+                                        (\config ->
+                                            List.Extra.elemIndex category config.categories
+                                                |> Maybe.map (\i -> i - 1)
+                                                |> Maybe.map (flip (%) (List.length config.categories))
+                                                |> Maybe.andThen (\i -> List.Extra.getAt i config.categories)
+                                        )
+                                        model.config
+                                        |> Result.withDefault Nothing
+                            in
+                            ( { model | selectedCategory = selectedCategory }, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                Right ->
+                    case model.selectedCategory of
+                        Just category ->
+                            let
+                                selectedCategory =
+                                    Result.map
+                                        (\config ->
+                                            List.Extra.elemIndex category config.categories
+                                                |> Maybe.map (\i -> i + 1)
+                                                |> Maybe.map (flip (%) (List.length config.categories))
+                                                |> Maybe.andThen (\i -> List.Extra.getAt i config.categories)
+                                        )
+                                        model.config
+                                        |> Result.withDefault Nothing
+                            in
+                            ( { model | selectedCategory = selectedCategory }, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
+
+                Up ->
+                    ( model, Cmd.none )
+
+                Down ->
+                    ( model, Cmd.none )
+
 
 hexToInt : String -> Int
 hexToInt =
@@ -106,12 +187,9 @@ codeToStr =
 
 spriteCss : Int -> Int -> String -> List ( String, String )
 spriteCss x y url =
-    [ ( "width", "32px" )
-    , ( "height", "32px" )
-    , ( "background", "url(" ++ url ++ ")" )
+    [ ( "background", "url(" ++ url ++ ")" )
     , ( "background-position", "-" ++ toString x ++ "px " ++ "-" ++ toString y ++ "px" )
     ]
-        |> Debug.log "mhey"
 
 
 isJust : Maybe a -> Bool
@@ -124,13 +202,9 @@ isJust m =
             False
 
 
-viewCategorySelector : Maybe String -> List Emoji -> E.Element Styles variation Msg
-viewCategorySelector activeCategory emojis =
+viewCategorySelector : Maybe String -> List String -> E.Element Styles variation Msg
+viewCategorySelector activeCategory categories =
     let
-        categories =
-            Set.fromList (List.map .category emojis)
-                |> Set.toList
-
         navStyle =
             \cat ->
                 if activeCategory == Just cat then
@@ -139,69 +213,105 @@ viewCategorySelector activeCategory emojis =
                     None
 
         options =
-            List.map (\cat -> E.text cat |> E.el (navStyle cat) [ EE.onClick (SelectCategory cat) ]) categories
+            List.map (\cat -> E.text cat |> E.el (navStyle cat) [ EA.paddingBottom 4, EE.onClick (SelectCategory cat) ]) categories
     in
     E.navigation CategoryList
-        [ EA.spacing 10 ]
+        [ EA.spacing 8, EA.width (EA.percent 100), EA.padding 8 ]
         { options = options
         , name = "Category"
         }
 
 
-viewEmoji : String -> Emoji -> E.Element Styles variation Msg
-viewEmoji url emoji =
-    E.html <|
-        div [ onClick (SelectEmoji emoji.name), style <| spriteCss (32 * emoji.x) (32 * emoji.y) url ] []
+emojiStyle : Int -> Styles
+emojiStyle index =
+    case index % 2 of
+        0 ->
+            EmojiItem Green
+
+        1 ->
+            EmojiItem Gray
+
+        _ ->
+            EmojiItem Green
 
 
-viewEmojiDetail : String -> Emoji -> E.Element Styles variation Msg
+viewEmoji : Int -> String -> Emoji -> E.Element Styles variation Msg
+viewEmoji index url emoji =
+    E.el (emojiStyle index)
+        [ EE.onClick (SelectEmoji emoji.name)
+        , EA.height (EA.px 64)
+        , EA.width (EA.px 64)
+        , EA.center
+        ]
+    <|
+        E.el None
+            [ EA.center
+            , EA.verticalCenter
+            , EA.inlineStyle <| spriteCss (32 * emoji.x) (32 * emoji.y) url
+            , EA.height (EA.px 32)
+            , EA.width (EA.px 32)
+            ]
+            E.empty
+
+
+viewEmojiDetail : String -> Maybe Emoji -> E.Element Styles variation Msg
 viewEmojiDetail url emoji =
     E.row None
-        [ EA.verticalCenter ]
-        [ E.html <|
-            div [ style <| spriteCss (32 * emoji.x) (32 * emoji.y) url ] []
-        , E.text emoji.name
-        ]
+        [ EA.padding 8, EA.center, EA.verticalCenter, EA.spacing 8 ]
+        (Maybe.map
+            (\em ->
+                [ E.el None
+                    [ spriteCss (32 * em.x) (32 * em.y) url |> EA.inlineStyle
+                    , EA.height (EA.px 32)
+                    , EA.width (EA.px 32)
+                    ]
+                    E.empty
+                , E.text em.name
+                ]
+            )
+            emoji
+            |> Maybe.withDefault [ E.text "No emoji selected" ]
+        )
 
 
 emojisByCategory : String -> List Emoji -> List Emoji
-emojisByCategory category =
-    List.filter (.category >> (==) category)
+emojisByCategory category emojis =
+    List.filter (.category >> (==) category) emojis
 
 
 viewEmojis : String -> List Emoji -> E.Element Styles variation Msg
 viewEmojis url emojis =
     let
         length =
-            toFloat <| List.length emojis
+            List.length emojis
 
         x =
-            min 9 <| ceiling <| sqrt length
+            9
 
         y =
-            ceiling <| (length / 9)
+            length // x
 
         columns =
-            List.range 0 x |> List.map (\a -> EA.px 32)
+            List.range 0 (x - 1) |> List.map (\a -> EA.px 64)
 
         rows =
-            List.range 0 y |> List.map (\a -> EA.px 32)
+            List.range 0 (y - 1) |> List.map (\a -> EA.px 64)
 
         cells =
             List.indexedMap
                 (\i emoji ->
                     E.cell
-                        { start = ( rem i x, i // y )
+                        { start = ( rem i x, i // x )
                         , width = 1
                         , height = 1
                         , content =
-                            viewEmoji url emoji
+                            viewEmoji i url emoji
                         }
                 )
                 emojis
     in
     E.grid EmojisGrid
-        [ EA.yScrollbar, EA.maxHeight (EA.px 300), EA.spacing 24 ]
+        [ EA.yScrollbar, EA.maxHeight (EA.px 300) ]
         { columns = columns
         , rows = rows
         , cells = cells
@@ -214,15 +324,38 @@ type Styles
     | CategoryList
     | EmojisWidget
     | EmojisGrid
+    | EmojiItem BackgroundStyle
 
 
+type BackgroundStyle
+    = Green
+    | Gray
+
+
+stylesheet : S.StyleSheet Styles variation
 stylesheet =
     S.styleSheet
         [ S.style None []
         , S.style ActiveCategory [ Style.Border.bottom 2, Style.Border.solid ]
-        , S.style CategoryList [ Style.Border.bottom 1, Style.Border.solid ]
-        , S.style EmojisWidget [ Style.Border.all 1, Style.Border.rounded 2, Style.Border.solid, Style.Color.background (Color.rgb 249 249 249) ]
+        , S.style CategoryList []
+        , S.style EmojisWidget
+            [ Style.Border.all 1
+            , Style.Border.rounded 6
+            , Style.Border.solid
+            , Style.Color.border (Color.rgba 0 0 0 0.15)
+            , Style.Color.background (Color.rgb 249 249 249)
+            ]
         , S.style EmojisGrid [ Style.Color.background Color.white ]
+        , S.style (EmojiItem Green)
+            [ S.hover
+                [ Style.Color.background Color.green
+                ]
+            ]
+        , S.style (EmojiItem Gray)
+            [ S.hover
+                [ Style.Color.background Color.gray
+                ]
+            ]
         ]
 
 
@@ -236,11 +369,10 @@ view model =
             in
             E.column EmojisWidget
                 [ EA.center ]
-                [ viewCategorySelector model.selectedCategory config.emojis
+                [ viewCategorySelector model.selectedCategory config.categories
                 , Maybe.map (viewEmojis config.emojisUrl) selectedEmojis
                     |> Maybe.withDefault (E.text "No category selected")
-                , Maybe.map (viewEmojiDetail config.emojisUrl) model.selectedEmoji
-                    |> Maybe.withDefault (E.text "No emoji selected")
+                , viewEmojiDetail config.emojisUrl model.selectedEmoji
                 ]
                 |> E.layout stylesheet
         )
@@ -249,11 +381,46 @@ view model =
         |> Maybe.withDefault (text "Loading ...")
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Keyboard.downs
+        (\code ->
+            let
+                left =
+                    37
+
+                up =
+                    38
+
+                right =
+                    39
+
+                down =
+                    40
+            in
+            case code of
+                37 ->
+                    CursorMove Left
+
+                39 ->
+                    CursorMove Right
+
+                38 ->
+                    CursorMove Up
+
+                40 ->
+                    CursorMove Down
+
+                _ ->
+                    Noop
+        )
+
+
 main : Program JD.Value Model Msg
 main =
     Html.programWithFlags
         { view = view
         , init = init
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
