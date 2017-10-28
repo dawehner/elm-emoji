@@ -18,17 +18,11 @@ import Style.Color
 
 
 type alias Model =
-    { config :
-        Result String Config
-    , selectedEmoji : Maybe Emoji
-    , selectedCategory : Maybe String
-    }
-
-
-type alias Config =
     { emojis : List Emoji
     , emojisUrl : String
     , categories : List String
+    , selectedEmoji : Maybe Emoji
+    , selectedCategory : Maybe String
     }
 
 
@@ -72,21 +66,20 @@ init flags =
     let
         emojis =
             JD.decodeValue (JD.index 0 decodeEmojis) flags
+                |> Result.withDefault []
 
-        emojiUrl =
+        emojisUrl =
             JD.decodeValue (JD.index 1 JD.string) flags
+                |> Result.withDefault ""
 
         categories =
-            Result.map
-                (\emojis_ ->
-                    List.map .category emojis_ |> Set.fromList |> Set.toList
-                )
-                emojis
-
-        config =
-            Result.map3 Config emojis emojiUrl categories
+            List.map .category emojis
+                |> Set.fromList
+                |> Set.toList
     in
-    ( { config = config
+    ( { emojis = emojis
+      , emojisUrl = emojisUrl
+      , categories = categories
       , selectedEmoji = Nothing
       , selectedCategory = Just "People"
       }
@@ -110,14 +103,8 @@ update msg model =
         SelectEmoji name ->
             let
                 selectedEmoji =
-                    Result.map
-                        (\config ->
-                            List.filter (.name >> (==) name) config.emojis
-                                |> List.head
-                        )
-                        model.config
-                        |> Result.toMaybe
-                        |> Maybe.andThen (\res -> res)
+                    List.filter (.name >> (==) name) model.emojis
+                        |> List.head
             in
             ( { model | selectedEmoji = selectedEmoji }
             , Cmd.none
@@ -133,15 +120,10 @@ update msg model =
                         Just category ->
                             let
                                 selectedCategory =
-                                    Result.map
-                                        (\config ->
-                                            List.Extra.elemIndex category config.categories
-                                                |> Maybe.map (\i -> i - 1)
-                                                |> Maybe.map (flip (%) (List.length config.categories))
-                                                |> Maybe.andThen (\i -> List.Extra.getAt i config.categories)
-                                        )
-                                        model.config
-                                        |> Result.withDefault Nothing
+                                    List.Extra.elemIndex category model.categories
+                                        |> Maybe.map (\i -> i - 1)
+                                        |> Maybe.map (flip (%) (List.length model.categories))
+                                        |> Maybe.andThen (\i -> List.Extra.getAt i model.categories)
                             in
                             ( { model | selectedCategory = selectedCategory }, Cmd.none )
 
@@ -153,15 +135,10 @@ update msg model =
                         Just category ->
                             let
                                 selectedCategory =
-                                    Result.map
-                                        (\config ->
-                                            List.Extra.elemIndex category config.categories
-                                                |> Maybe.map (\i -> i + 1)
-                                                |> Maybe.map (flip (%) (List.length config.categories))
-                                                |> Maybe.andThen (\i -> List.Extra.getAt i config.categories)
-                                        )
-                                        model.config
-                                        |> Result.withDefault Nothing
+                                    List.Extra.elemIndex category model.categories
+                                        |> Maybe.map (\i -> i + 1)
+                                        |> Maybe.map (flip (%) (List.length model.categories))
+                                        |> Maybe.andThen (\i -> List.Extra.getAt i model.categories)
                             in
                             ( { model | selectedCategory = selectedCategory }, Cmd.none )
 
@@ -361,24 +338,18 @@ stylesheet =
 
 view : Model -> Html Msg
 view model =
-    Result.map
-        (\config ->
-            let
-                selectedEmojis =
-                    Maybe.map (\category -> emojisByCategory category config.emojis) model.selectedCategory
-            in
-            E.column EmojisWidget
-                [ EA.center ]
-                [ viewCategorySelector model.selectedCategory config.categories
-                , Maybe.map (viewEmojis config.emojisUrl) selectedEmojis
-                    |> Maybe.withDefault (E.text "No category selected")
-                , viewEmojiDetail config.emojisUrl model.selectedEmoji
-                ]
-                |> E.layout stylesheet
-        )
-        model.config
-        |> Result.toMaybe
-        |> Maybe.withDefault (text "Loading ...")
+    let
+        selectedEmojis =
+            Maybe.map (\category -> emojisByCategory category model.emojis) model.selectedCategory
+    in
+    E.column EmojisWidget
+        [ EA.center ]
+        [ viewCategorySelector model.selectedCategory model.categories
+        , Maybe.map (viewEmojis model.emojisUrl) selectedEmojis
+            |> Maybe.withDefault (E.text "No category selected")
+        , viewEmojiDetail model.emojisUrl model.selectedEmoji
+        ]
+        |> E.layout stylesheet
 
 
 subscriptions : Model -> Sub Msg
