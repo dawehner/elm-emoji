@@ -85,6 +85,7 @@ init flags =
             List.map .category emojis
                 |> Set.fromList
                 |> Set.toList
+                |> List.filter ((/=) "Skin Tones")
     in
     ( { emojis = emojis
       , emojisUrl = emojisUrl
