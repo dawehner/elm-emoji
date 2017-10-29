@@ -36,6 +36,8 @@ type alias Emoji =
     , x : Int
     , y : Int
     , category : String
+    , shortNames : List String
+    , sortOrder : Float
     }
 
 
@@ -56,11 +58,13 @@ decodeEmojis : JD.Decoder (List Emoji)
 decodeEmojis =
     JD.list
         (JD.maybe
-            (JD.map4 Emoji
+            (JD.map6 Emoji
                 (JD.field "name" JD.string)
                 (JD.field "sheet_x" JD.int)
                 (JD.field "sheet_y" JD.int)
                 (JD.field "category" JD.string)
+                (JD.field "short_names" (JD.list JD.string))
+                (JD.field "sort_order" JD.float)
             )
         )
         |> JD.map (List.filterMap identity)
@@ -433,10 +437,12 @@ view model =
             isJust model.searchString
 
         selectedEmojis =
-            if not hasSearchString then
+            (if not hasSearchString then
                 Maybe.map (\category -> emojisByCategory category model.emojis) model.selectedCategory
-            else
+             else
                 Maybe.map (\string -> emojisFilteredByString string model.emojis) model.searchString
+            )
+                |> Maybe.map (List.sortBy .sortOrder)
     in
     E.column EmojisWidget
         [ EA.center ]
