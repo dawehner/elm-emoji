@@ -2,10 +2,13 @@ module Main exposing (..)
 
 import Char exposing (fromCode, toCode)
 import Color
+import Colorbrewer.Qualitative
 import Element as E
 import Element.Attributes as EA
 import Element.Events as EE
+import Element.Input as EI
 import Html exposing (Html, div, img, option, select, span, text)
+import Html.Lazy exposing (lazy)
 import Json.Decode as JD
 import Keyboard
 import List.Extra
@@ -15,6 +18,7 @@ import String exposing (fromChar, toLower)
 import Style as S
 import Style.Border
 import Style.Color
+import Style.Font
 
 
 type alias Model =
@@ -23,6 +27,7 @@ type alias Model =
     , categories : List String
     , selectedEmoji : Maybe Emoji
     , selectedCategory : Maybe String
+    , searchString : Maybe String
     }
 
 
@@ -82,6 +87,7 @@ init flags =
       , categories = categories
       , selectedEmoji = Nothing
       , selectedCategory = Just "People"
+      , searchString = Nothing
       }
     , Cmd.none
     )
@@ -92,6 +98,7 @@ type Msg
     | SelectEmoji String
     | SelectCategory String
     | CursorMove Cursor
+    | SearchInput String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -151,6 +158,17 @@ update msg model =
                 Down ->
                     ( model, Cmd.none )
 
+        SearchInput string ->
+            ( { model
+                | searchString =
+                    if String.length string > 0 then
+                        Just string
+                    else
+                        Nothing
+              }
+            , Cmd.none
+            )
+
 
 hexToInt : String -> Int
 hexToInt =
@@ -187,29 +205,50 @@ viewCategorySelector activeCategory categories =
                 if activeCategory == Just cat then
                     ActiveCategory
                 else
-                    None
+                    InactiveCategory
 
         options =
             List.map (\cat -> E.text cat |> E.el (navStyle cat) [ EA.paddingBottom 4, EE.onClick (SelectCategory cat) ]) categories
     in
     E.navigation CategoryList
-        [ EA.spacing 8, EA.width (EA.percent 100), EA.padding 8 ]
+        [ EA.spacing 8, EA.width EA.fill, EA.padding 8 ]
         { options = options
         , name = "Category"
         }
 
 
+viewSearchFilter : String -> E.Element Styles variation Msg
+viewSearchFilter searchString =
+    E.el None [ EA.padding 5, EA.width EA.fill ] <|
+        EI.search SearchFilter
+            [ EA.padding 5 ]
+            { onChange = SearchInput
+            , value = searchString
+            , label = EI.placeholder { text = "Search", label = EI.hiddenLabel "Search" }
+            , options = []
+            }
+
+
 emojiStyle : Int -> Styles
 emojiStyle index =
-    case index % 2 of
+    case index % 5 of
         0 ->
-            EmojiItem Green
+            EmojiItem First
 
         1 ->
-            EmojiItem Gray
+            EmojiItem Second
+
+        2 ->
+            EmojiItem Third
+
+        3 ->
+            EmojiItem Forth
+
+        4 ->
+            EmojiItem Fifth
 
         _ ->
-            EmojiItem Green
+            EmojiItem First
 
 
 viewEmoji : Int -> String -> Emoji -> E.Element Styles variation Msg
@@ -243,17 +282,22 @@ viewEmojiDetail url emoji =
                     , EA.width (EA.px 32)
                     ]
                     E.empty
-                , E.text em.name
+                , E.el EmojiDetailText [] (E.text em.name)
                 ]
             )
             emoji
-            |> Maybe.withDefault [ E.text "No emoji selected" ]
+            |> Maybe.withDefault [ E.text "No emoji selected" |> E.el EmojiDetailText [] ]
         )
 
 
 emojisByCategory : String -> List Emoji -> List Emoji
-emojisByCategory category emojis =
-    List.filter (.category >> (==) category) emojis
+emojisByCategory category =
+    List.filter (.category >> (==) category)
+
+
+emojisFilteredByString : String -> List Emoji -> List Emoji
+emojisFilteredByString string =
+    List.filter (.name >> String.contains string)
 
 
 viewEmojis : String -> List Emoji -> E.Element Styles variation Msg
@@ -298,22 +342,38 @@ viewEmojis url emojis =
 type Styles
     = None
     | ActiveCategory
+    | InactiveCategory
     | CategoryList
     | EmojisWidget
     | EmojisGrid
     | EmojiItem BackgroundStyle
+    | EmojiDetailText
+    | SearchFilter
 
 
 type BackgroundStyle
-    = Green
-    | Gray
+    = First
+    | Second
+    | Third
+    | Forth
+    | Fifth
 
 
 stylesheet : S.StyleSheet Styles variation
 stylesheet =
+    let
+        fonts =
+            Style.Font.typeface
+                [ Style.Font.font "Helvetica"
+                , Style.Font.font "Trebuchet MS"
+                , Style.Font.font "Verdana"
+                , Style.Font.font "sans-serif"
+                ]
+    in
     S.styleSheet
         [ S.style None []
-        , S.style ActiveCategory [ Style.Border.bottom 2, Style.Border.solid ]
+        , S.style ActiveCategory [ Style.Border.bottom 2, Style.Border.solid, fonts ]
+        , S.style InactiveCategory [ fonts ]
         , S.style CategoryList []
         , S.style EmojisWidget
             [ Style.Border.all 1
@@ -323,15 +383,45 @@ stylesheet =
             , Style.Color.background (Color.rgb 249 249 249)
             ]
         , S.style EmojisGrid [ Style.Color.background Color.white ]
-        , S.style (EmojiItem Green)
+        , S.style (EmojiItem First)
             [ S.hover
-                [ Style.Color.background Color.green
+                [ Style.Border.rounded 10
+                , Style.Color.background Colorbrewer.Qualitative.pastel15_0
                 ]
             ]
-        , S.style (EmojiItem Gray)
+        , S.style (EmojiItem Second)
             [ S.hover
-                [ Style.Color.background Color.gray
+                [ Style.Border.rounded 10
+                , Style.Color.background Colorbrewer.Qualitative.pastel15_1
                 ]
+            ]
+        , S.style (EmojiItem Third)
+            [ S.hover
+                [ Style.Border.rounded 10
+                , Style.Color.background Colorbrewer.Qualitative.pastel15_2
+                ]
+            ]
+        , S.style (EmojiItem Forth)
+            [ S.hover
+                [ Style.Border.rounded 10
+                , Style.Color.background Colorbrewer.Qualitative.pastel15_3
+                ]
+            ]
+        , S.style (EmojiItem Fifth)
+            [ S.hover
+                [ Style.Border.rounded 10
+                , Style.Color.background Colorbrewer.Qualitative.pastel15_4
+                ]
+            ]
+        , S.style EmojiDetailText
+            [ fonts ]
+        , S.style SearchFilter
+            [ fonts
+            , Style.Font.size 13
+            , Style.Border.all 1
+            , Style.Border.rounded 6
+            , Style.Color.border (Color.rgba 0 0 0 0.15)
+            , Style.Color.background (Color.rgb 249 249 249)
             ]
         ]
 
@@ -339,14 +429,21 @@ stylesheet =
 view : Model -> Html Msg
 view model =
     let
+        hasSearchString =
+            isJust model.searchString
+
         selectedEmojis =
-            Maybe.map (\category -> emojisByCategory category model.emojis) model.selectedCategory
+            if not hasSearchString then
+                Maybe.map (\category -> emojisByCategory category model.emojis) model.selectedCategory
+            else
+                Maybe.map (\string -> emojisFilteredByString string model.emojis) model.searchString
     in
     E.column EmojisWidget
         [ EA.center ]
         [ viewCategorySelector model.selectedCategory model.categories
+        , viewSearchFilter (Maybe.withDefault "" model.searchString)
         , Maybe.map (viewEmojis model.emojisUrl) selectedEmojis
-            |> Maybe.withDefault (E.text "No category selected")
+            |> Maybe.withDefault (E.text "No category selected" |> E.el EmojiDetailText [])
         , viewEmojiDetail model.emojisUrl model.selectedEmoji
         ]
         |> E.layout stylesheet
