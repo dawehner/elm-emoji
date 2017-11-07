@@ -3,6 +3,7 @@ module Main exposing (..)
 import Char exposing (fromCode, toCode)
 import Color
 import Colorbrewer.Qualitative
+import Dom.Scroll
 import Element as E
 import Element.Attributes as EA
 import Element.Events as EE
@@ -19,6 +20,7 @@ import Style as S
 import Style.Border
 import Style.Color
 import Style.Font
+import Task
 
 
 type alias Model =
@@ -52,6 +54,13 @@ type Selection
     = NoSelection
     | CategorySelection String
     | EmojiSelection String
+
+
+type alias ScrollEvent =
+    { scrollHeight : Int
+    , scrollTop : Int
+    , clientHeight : Int
+    }
 
 
 decodeEmojis : JD.Decoder (List Emoji)
@@ -104,6 +113,7 @@ type Msg
     | SelectCategory String
     | CursorMove Cursor
     | SearchInput String
+    | ScrolledMessage ScrollEvent
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -174,10 +184,30 @@ update msg model =
             , Cmd.none
             )
 
+        ScrolledMessage scrollEvent ->
+            let
+                end =
+                    scrollEvent.scrollTop
+                        == (scrollEvent.scrollHeight
+                                - scrollEvent.clientHeight
+                           )
+            in
+            if end then
+                ( { model | selectedCategory = Maybe.andThen (flip cycle model.categories) model.selectedCategory }, Dom.Scroll.toTop "emojis" |> Task.attempt (\_ -> Noop) )
+            else
+                ( model, Cmd.none )
+
 
 hexToInt : String -> Int
 hexToInt =
     String.foldl (\hexDigit int -> int * 16 + toCode hexDigit % 39 - 9) 0 << toLower
+
+
+cycle : a -> List a -> Maybe a
+cycle x xs =
+    List.Extra.elemIndex x xs
+        |> Maybe.map ((+) 1)
+        |> Maybe.andThen (flip List.Extra.getAt xs)
 
 
 codeToStr : Int -> String
@@ -337,11 +367,23 @@ viewEmojis url emojis =
                 emojis
     in
     E.grid EmojisGrid
-        [ EA.yScrollbar, EA.maxHeight (EA.px 300) ]
+        [ EA.yScrollbar, EA.id "emojis", EA.maxHeight (EA.px 300), onScroll ScrolledMessage ]
         { columns = columns
         , rows = rows
         , cells = cells
         }
+
+
+onScroll tagger =
+    EE.on "scroll" (JD.map tagger onScrollJsonParser)
+
+
+onScrollJsonParser : JD.Decoder ScrollEvent
+onScrollJsonParser =
+    JD.map3 ScrollEvent
+        (JD.at [ "target", "scrollHeight" ] JD.int)
+        (JD.at [ "target", "scrollTop" ] JD.int)
+        (JD.at [ "target", "clientHeight" ] JD.int)
 
 
 type Styles
