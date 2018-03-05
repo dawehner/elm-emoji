@@ -1,5 +1,8 @@
 # Elm emoji picker
 
+![Emoji picker, yeah](https://raw.githubusercontent.com/dawehner/elm-emoji/master/pictures/screenshot.jpg)
+
+
 THis project is a emoji picker build in elm.
 
 ## Installation
@@ -13,3 +16,4 @@ THis project is a emoji picker build in elm.
 ```
 elm-app start
 ```
+
