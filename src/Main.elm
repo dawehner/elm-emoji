@@ -1,15 +1,8 @@
 module Main exposing (..)
 
--- import Style as S
--- import Style.Border
--- import Style.Color
--- import Style.Font
 -- import List.Extra
 -- import Keyboard
--- import Element.Attributes as EA
--- import Dom.Scroll
 -- import Colorbrewer.Qualitative
--- import Color
 
 import Browser
 import Browser.Dom
@@ -21,7 +14,7 @@ import Element.Events as EE
 import Element.Font as EF
 import Element.Input as EI
 import Element.Region as ER
-import Html exposing (Html, div, img, option, select, span, text)
+import Html exposing (Html)
 import Html.Attributes
 import Html.Lazy exposing (lazy)
 import Http
@@ -353,7 +346,7 @@ viewSearchFilter searchString =
             , EB.color (E.rgba 0.0 0.0 0.0 0.15)
             , EBa.color (E.rgb (249.0 / 256.0) (249.0 / 256.0) (249.0 / 256.0))
             ]
-            { onChange = Just SearchInput
+            { onChange = SearchInput
             , text = searchString
             , label = EI.labelAbove [] (E.text "Search")
             , placeholder =
