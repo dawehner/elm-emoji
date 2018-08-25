@@ -1,11 +1,8 @@
-module Main exposing (..)
-
--- import List.Extra
--- import Keyboard
--- import Colorbrewer.Qualitative
+module Main exposing (Cursor(..), Emoji, Model, Msg(..), ScrollEvent, Selection(..), codeToStr, cycle, decodeEmojis, elemIndex, emojisByCategory, emojisFilteredByString, fetchEmojis, findIndex, findIndexHelp, fonts, getAt, groupsOf, groupsOfWithStep, hexToInt, init, isJust, main, spriteCssAttribute, subscriptions, update, view, viewCategorySelector, viewEmoji, viewEmojiDetail, viewEmojis, viewSearchFilter)
 
 import Browser
 import Browser.Dom
+import Browser.Events
 import Char exposing (fromCode, toCode)
 import Element as E
 import Element.Background as EBa
@@ -355,14 +352,36 @@ viewSearchFilter searchString =
             }
 
 
+emojiBackground index =
+    case modBy 5 index of
+        0 ->
+            ( 0.69921875, 0.80078125, 0.88671875 )
+
+        1 ->
+            ( 0.69921875, 0.80078125, 0.88671875 )
+
+        2 ->
+            ( 0.796875, 0.91796875, 0.76953125 )
+
+        3 ->
+            ( 0.8671875, 0.79296875, 0.890625 )
+
+        4 ->
+            ( 0.9921875, 0.84765625, 0.6484375 )
+
+        _ ->
+            emojiBackground 0
+
+
 viewEmoji : Int -> String -> Emoji -> E.Element Msg
 viewEmoji index url emoji =
     E.el
-        --(emojiStyle index)
         [ EE.onClick (SelectEmoji emoji.name)
         , E.height (E.px 64)
         , E.width (E.px 64)
         , E.centerX
+        , EB.rounded 10
+        , EBa.color <| (\( r, g, b ) -> E.rgba r g b 0.2) (emojiBackground index)
         ]
     <|
         E.el
@@ -500,49 +519,6 @@ fonts =
         ]
 
 
-
--- stylesheet : S.StyleSheet Styles variation
--- stylesheet =
---     let
---
---     in
---     S.styleSheet
---         [
---         , S.style (EmojiItem First)
---             [ S.hover
---                 [ Style.Border.rounded 10
---                 , Style.Color.background Colorbrewer.Qualitative.pastel15_0
---                 ]
---             ]
---         , S.style (EmojiItem Second)
---             [ S.hover
---                 [ Style.Border.rounded 10
---                 , Style.Color.background Colorbrewer.Qualitative.pastel15_1
---                 ]
---             ]
---         , S.style (EmojiItem Third)
---             [ S.hover
---                 [ Style.Border.rounded 10
---                 , Style.Color.background Colorbrewer.Qualitative.pastel15_2
---                 ]
---             ]
---         , S.style (EmojiItem Forth)
---             [ S.hover
---                 [ Style.Border.rounded 10
---                 , Style.Color.background Colorbrewer.Qualitative.pastel15_3
---                 ]
---             ]
---         , S.style (EmojiItem Fifth)
---             [ S.hover
---                 [ Style.Border.rounded 10
---                 , Style.Color.background Colorbrewer.Qualitative.pastel15_4
---                 ]
---             ]
---         ,
---
---         ]
-
-
 view : Model -> Html Msg
 view model =
     let
@@ -582,34 +558,27 @@ view model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    Browser.Events.onKeyDown
+        (JD.field "key" JD.string)
+        |> Sub.map (Debug.log "subscriptions")
+        |> Sub.map
+            (\key ->
+                case key of
+                    "ArrowLeft" ->
+                        CursorMove Left
 
+                    "ArrowRight" ->
+                        CursorMove Right
 
+                    "ArrowDown" ->
+                        CursorMove Down
 
--- Keyboard.downs
---     (\code ->
---         let
---             left =
---                 37
---             up =
---                 38
---             right =
---                 39
---             down =
---                 40
---         in
---         case code of
---             37 ->
---                 CursorMove Left
---             39 ->
---                 CursorMove Right
---             38 ->
---                 CursorMove Up
---             40 ->
---                 CursorMove Down
---             _ ->
---                 Noop
---     )
+                    "ArrowUp" ->
+                        CursorMove Up
+
+                    _ ->
+                        Noop
+            )
 
 
 main : Program JD.Value Model Msg
