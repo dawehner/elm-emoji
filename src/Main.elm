@@ -134,7 +134,9 @@ update msg model =
             )
 
         SelectCategory category ->
-            ( { model | selectedCategory = Just category }, Cmd.none )
+            ( { model | selectedCategory = Just category }
+            , Browser.Dom.setViewportOf "emojis" 0 0 |> Task.attempt (\_ -> Noop)
+            )
 
         CursorMove cursor ->
             case cursor of
@@ -317,6 +319,7 @@ viewCategorySelector activeCategory categories =
                                 , left = 0
                                 , right = 0
                                 }
+                             , E.width E.fill
                              , fonts
                              , EE.onClick (SelectCategory cat)
                              , E.pointer
