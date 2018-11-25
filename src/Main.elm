@@ -1,9 +1,11 @@
-module Main exposing (Cursor(..), Emoji, Model, Msg(..), ScrollEvent, Selection(..), codeToStr, cycle, decodeEmojis, elemIndex, emojisByCategory, emojisFilteredByString, fetchEmojis, findIndex, findIndexHelp, fonts, getAt, groupsOf, groupsOfWithStep, hexToInt, init, isJust, main, spriteCssAttribute, subscriptions, update, view, viewCategorySelector, viewEmoji, viewEmojiDetail, viewEmojis, viewSearchFilter)
+module Main exposing (main)
 
 import Browser
 import Browser.Dom
 import Browser.Events
 import Char exposing (fromCode, toCode)
+import Color
+import Colorbrewer.Qualitative as CQ
 import Element as E
 import Element.Background as EBa
 import Element.Border as EB
@@ -26,7 +28,6 @@ type alias Model =
     { emojis : List Emoji
     , emojisUrl : String
     , categories : List String
-    , selectedEmoji : Maybe Emoji
     , selectedCategory : Maybe String
     , searchString : Maybe String
     }
@@ -39,6 +40,7 @@ type alias Emoji =
     , category : String
     , shortNames : List String
     , sortOrder : Float
+    , isSelected : Bool
     }
 
 
@@ -66,13 +68,14 @@ decodeEmojis : JD.Decoder (List Emoji)
 decodeEmojis =
     JD.list
         (JD.maybe
-            (JD.map6 Emoji
+            (JD.map7 Emoji
                 (JD.field "name" JD.string)
                 (JD.field "sheet_x" JD.int)
                 (JD.field "sheet_y" JD.int)
                 (JD.field "category" JD.string)
                 (JD.field "short_names" (JD.list JD.string))
                 (JD.field "sort_order" JD.float)
+                (JD.succeed False)
             )
         )
         |> JD.map (List.filterMap identity)
@@ -99,7 +102,6 @@ init flags =
     ( { emojis = emojis
       , emojisUrl = "/node_modules/emoji-datasource/img/emojione/sheets/32.png"
       , categories = categories
-      , selectedEmoji = Nothing
       , selectedCategory = Just "People"
       , searchString = Nothing
       }
@@ -125,11 +127,18 @@ update msg model =
 
         SelectEmoji name ->
             let
-                selectedEmoji =
-                    List.filter (.name >> (==) name) model.emojis
-                        |> List.head
+                emojis =
+                    List.map
+                        (\emoji ->
+                            if emoji.name == name then
+                                { emoji | isSelected = True }
+
+                            else
+                                { emoji | isSelected = False }
+                        )
+                        model.emojis
             in
-            ( { model | selectedEmoji = selectedEmoji }
+            ( { model | emojis = emojis }
             , Cmd.none
             )
 
@@ -355,22 +364,30 @@ viewSearchFilter searchString =
             }
 
 
+toElementColor color =
+    let
+        rgba =
+            Debug.log "muh" (Color.toRgba color)
+    in
+    E.rgba (rgba.red / 256.0) (rgba.green / 256.0) (rgba.blue / 256.0) 0.2
+
+
 emojiBackground index =
     case modBy 5 index of
         0 ->
-            ( 0.69921875, 0.80078125, 0.88671875 )
+            toElementColor CQ.accent5_0
 
         1 ->
-            ( 0.69921875, 0.80078125, 0.88671875 )
+            toElementColor CQ.accent5_1
 
         2 ->
-            ( 0.796875, 0.91796875, 0.76953125 )
+            toElementColor CQ.accent5_2
 
         3 ->
-            ( 0.8671875, 0.79296875, 0.890625 )
+            toElementColor CQ.accent5_3
 
         4 ->
-            ( 0.9921875, 0.84765625, 0.6484375 )
+            toElementColor CQ.accent5_4
 
         _ ->
             emojiBackground 0
@@ -384,7 +401,19 @@ viewEmoji index url emoji =
         , E.width (E.px 64)
         , E.centerX
         , EB.rounded 10
-        , EBa.color <| (\( r, g, b ) -> E.rgba r g b 0.2) (emojiBackground index)
+        , EB.width 2
+        , EB.color
+            (E.rgba 0.0
+                0.0
+                0.0
+                (if emoji.isSelected then
+                    0.5
+
+                 else
+                    0.0
+                )
+            )
+        , EBa.color (emojiBackground index)
         ]
     <|
         E.el
@@ -498,21 +527,6 @@ viewEmojis url emojis =
         (List.map (E.column []) rows)
 
 
-
--- E.grid
---     [
---     --onScroll ScrolledMessage
---     ]
--- onScroll tagger =
---     EE.on "scroll" (JD.map tagger onScrollJsonParser)
--- onScrollJsonParser : JD.Decoder ScrollEvent
--- onScrollJsonParser =
---     JD.map3 ScrollEvent
---         (JD.at [ "target", "scrollHeight" ] JD.int)
---         (JD.at [ "target", "scrollTop" ] JD.int)
---         (JD.at [ "target", "clientHeight" ] JD.int)
-
-
 fonts =
     EF.family
         [ EF.typeface "Helvetica"
@@ -554,7 +568,7 @@ view model =
                     |> E.el
                         [ fonts ]
                 )
-        , viewEmojiDetail model.emojisUrl model.selectedEmoji
+        , viewEmojiDetail model.emojisUrl (List.filter .isSelected model.emojis |> List.head)
         ]
         |> E.layout []
 
