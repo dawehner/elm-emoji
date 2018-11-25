@@ -348,7 +348,7 @@ viewSearchFilter searchString =
             ]
             { onChange = SearchInput
             , text = searchString
-            , label = EI.labelAbove [] (E.text "Search")
+            , label = EI.labelHidden "Search"
             , placeholder =
                 Just
                     (EI.placeholder [] (E.text "Search"))
