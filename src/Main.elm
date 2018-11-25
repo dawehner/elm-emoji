@@ -521,10 +521,11 @@ viewEmojis url emojis =
     E.row
         [ EBa.color (E.rgb 1.0 1.0 1.0)
         , E.scrollbarY
+        , E.spacing 3
         , E.htmlAttribute (Html.Attributes.id "emojis")
         , E.height (E.px 300)
         ]
-        (List.map (E.column []) rows)
+        (List.map (E.column [ E.spacing 3 ]) rows)
 
 
 fonts =
