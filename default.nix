@@ -10,6 +10,7 @@ stdenv.mkDerivation  rec {
       yarn
     ];
   };
+  unpackPhase = "true";
   postInstall = 
   ''
   yarn globabl add create-elm-app

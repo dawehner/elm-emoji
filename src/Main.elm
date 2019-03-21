@@ -91,13 +91,18 @@ init : JD.Value -> ( Model, Cmd Msg )
 init flags =
     let
         emojis =
-            []
+            JD.decodeValue (JD.index 0 decodeEmojis) flags
+                |> Result.withDefault []
 
         emojisUrl =
-            ""
+            JD.decodeValue (JD.index 1 JD.string) flags
+                |> Result.withDefault ""
 
         categories =
-            []
+            List.map .category emojis
+                |> Set.fromList
+                |> Set.toList
+                |> List.filter ((/=) "Skin Tones")
     in
     ( { emojis = emojis
       , emojisUrl = "/node_modules/emoji-datasource/img/emojione/sheets/32.png"
@@ -105,7 +110,7 @@ init flags =
       , selectedCategory = Just "People"
       , searchString = Nothing
       }
-    , fetchEmojis "/node_modules/emoji-datasource/emoji.json"
+    , Cmd.none
     )
 
 
@@ -367,7 +372,7 @@ viewSearchFilter searchString =
 toElementColor color =
     let
         rgba =
-            Debug.log "muh" (Color.toRgba color)
+            Color.toRgba color
     in
     E.rgba (rgba.red / 256.0) (rgba.green / 256.0) (rgba.blue / 256.0) 0.2
 
